@@ -1,4 +1,5 @@
 from collections import Counter, defaultdict
+from typing import Callable
 
 
 class Rule:
@@ -101,25 +102,7 @@ def get_top(n: int, rule: Rule) -> list[str]:
     return all_words[:n]
 
 
-def step(rule: Rule) -> bool:
-    if len(matched_words) < 2:
-        print('Игра окончена. Остались слова:', *matched_words)
-        return False
-
-    top = get_top(10, rule)
-    print(*top, sep=', ')
-    n = -1
-    while n > len(top) or n < 0:
-        n = int(input('введите номер слова, который взяли > '))
-
-    n -= 1
-    word = top[n]
-    print('вы выбрали:', word)
-    result = ''
-    allowed = '-+='
-    while len(result) != 5 or any((it not in allowed for it in result)):
-        result = input('введите результат > ')
-
+def update_rule(rule: Rule, word: str, result: str) -> None:
     for n, symbol in enumerate(result):
         if symbol == '-':
             rule.set_not_exists(word[n])
@@ -132,14 +115,59 @@ def step(rule: Rule) -> bool:
 
     apply_rule(rule)
     fill_symbols_counter()
+
+
+def input_and_check(prompt: str, check: Callable[[str], bool]) -> str:
+    answer = input(prompt)
+    while check(answer) is False:
+        answer = input(prompt)
+    return answer
+
+
+def get_next_word(rule: Rule) -> str:
+    try_to_guess = False
+    if len(matched_words) <= 5:
+        print('Осталось слова:', ', '.join(matched_words))
+        answer = input_and_check('Попробовать подобрать слово? (y/n) ', lambda x: x in ('y', 'n'))
+        if answer == 'y':
+            try_to_guess = True
+
+    if try_to_guess:
+        top = list(matched_words)
+    else:
+        top = get_top(10, rule)
+    print(*top, sep=', ')
+
+    n = int(input_and_check('введите номер слова, который взяли > ',
+                            lambda x: x.isdigit() and len(top) >= int(x) > 0))
+    word = top[n - 1]
+    print('вы выбрали:', word)
+    return word
+
+
+def step(rule: Rule) -> bool:
+    if len(matched_words) < 2:
+        print('Игра окончена. Остались слова:', ', '.join(matched_words))
+        return False
+
+    word = get_next_word(rule)
+    result = input_and_check(
+        'введите результат > ',
+        lambda x: len(x) == 5 and all((it in '-+=' for it in x))
+    )
+
+    update_rule(rule, word, result)
     return True
 
 
-def main():
-    read_file()
-    rule = Rule()
-    while step(rule):
-        pass
+def main() -> None:
+    try:
+        read_file()
+        rule = Rule()
+        while step(rule):
+            pass
+    except KeyboardInterrupt:
+        print('Игра окончена. Остались слова:', ', '.join(matched_words))
 
 
 if __name__ == '__main__':
