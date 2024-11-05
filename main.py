@@ -4,59 +4,54 @@ from typing import Callable
 
 class Rule:
     __slots__ = ['_exists', '_match', '_not_exists']
+    TOTAL_SYMBOLS = 5
 
     def __init__(self):
-        self._exists = defaultdict(list)
-        self._match = defaultdict(list)
-        self._not_exists = list()
+        self._exists: dict[str, set[int]] = defaultdict(set)
+        self._match: dict[str, set[int]] = defaultdict(set)
+        self._not_exists: set[str] = set()
 
     def set_exists(self, symbol: str, not_matched_position: int) -> None:
-        self._exists[symbol].append(not_matched_position)
+        self._exists[symbol].add(not_matched_position)
 
     def set_match(self, symbol: str, matched_position: int) -> None:
-        self._match[symbol].append(matched_position)
+        self._match[symbol].add(matched_position)
 
     def set_not_exists(self, symbol: str) -> None:
-        self._not_exists.append(symbol)
+        self._not_exists.add(symbol)
 
     def matches(self, word: str) -> bool:
-        for matched_symol in self._match.keys():
-            for position in self._match[matched_symol]:
-                if word[position] != matched_symol:
+        for symbol, positions in self._match.items():
+            for position in positions:
+                if word[position] != symbol:
                     return False
-        for n, symbol in enumerate(word):
-            for not_exist in self._not_exists:
-                if not_exist == symbol:
+
+        for position, symbol in enumerate(word):
+            if symbol in self._not_exists:
+                return False
+
+            if symbol in self._exists:
+                if position in self._exists[symbol] or symbol not in word:
                     return False
-            for exist in self._exists.keys():
-                if exist not in word:
-                    return False
-                if exist == symbol and n in self._exists[exist]:
-                    return False
+
         return True
 
-    def need_check(self, symbol: str, position: int) -> float:
-        for not_exist in self._not_exists:
-            if not_exist == symbol:
+    def need_check(self, symbol: str, position: int, found_symbols: set[str]) -> float:
+        if symbol in self._not_exists:
+            return 0.
+
+        if symbol in self._exists:
+            if position in self._exists[symbol]:
                 return 0.
-        for exist in self._exists.keys():
-            if exist == symbol:
-                if position in self._exists[exist]:
-                    return 0.
-                else:
-                    for p in self._match.values():
-                        return 0 if position in p else 0.35
-        has_same_matched = False
-        for exist in self._match.keys():
-            if exist == symbol:
-                has_same_matched = True
-                if position in self._match[exist]:
-                    return 0.
-        if len(found_symbols) > 4:
-            return 0
-        if has_same_matched:
-            return 0.1
-        return 1. - .07 * len(found_symbols)
+            return 0.35 if all(position not in positions for positions in self._match.values()) else 0.
+
+        if symbol in self._match:
+            if position in self._match[symbol]:
+                return 0.
+            return 0.1 if len(found_symbols) < Rule.TOTAL_SYMBOLS else 0.
+
+        return 1. - 0.07 * len(found_symbols)
+
 
 
 all_words = []
@@ -95,7 +90,7 @@ def get_top(n: int, rule: Rule) -> list[str]:
             if symbol in checked:
                 continue
             checked.add(symbol)
-            result -= rule.need_check(symbol, n) * symbols[symbol]
+            result -= rule.need_check(symbol, n, found_symbols) * symbols[symbol]
         return result
 
     all_words.sort(key=rang)
